@@ -35,8 +35,8 @@ NOME_REDE = {'UNESP': 'Rede Conecta Mundi (RCM)', 'UFMG': 'Rede INTER-NÓS', 'UN
 ABA = {r: f'{r} - PPGs' for r in REDES}
 COR = {'UNESP': '#2a78d6', 'UFMG': '#eb6834', 'UNICAMP': '#1baf7a'}
 CLARO = {'UNESP': '#e6f0fc', 'UFMG': '#fdeee6', 'UNICAMP': '#e3f6ee'}
-LOGO_ARQ = {'UNESP': ('unesp.svg', 'image/svg+xml'), 'UFMG': ('ufmg.png', 'image/png'),
-            'UNICAMP': ('unicamp.webp', 'image/webp'), 'UEA': ('uea.png', 'image/png')}
+# logos/ = imagens/ com margens recortadas e reduzidas: <SIGLA>.png|svg, REDE-<coord>.png, CAPESGLOBAL.png
+LOGOS = AQUI / 'logos'
 
 # Sede/reitoria de cada universidade: (cidade, UF, lat, lon, lado do rótulo)
 LOCAL = {
@@ -44,7 +44,7 @@ LOCAL = {
     'UNESP': ('São Paulo', 'SP', -23.55, -46.64, 'd'),
     'UFS': ('São Cristóvão', 'SE', -10.93, -37.10, 'e'),
     'UEMS': ('Dourados', 'MS', -22.22, -54.81, 'e'),
-    'UNEB': ('Salvador', 'BA', -12.97, -38.50, 'd'),
+    'UNEB': ('Salvador', 'BA', -12.97, -38.50, 'e'),
     'UNIOESTE': ('Cascavel', 'PR', -24.96, -53.46, 'e'),
     'UFMG': ('Belo Horizonte', 'MG', -19.87, -43.96, 'd'),
     'UFCSPA': ('Porto Alegre', 'RS', -30.03, -51.22, 'e'),
@@ -53,7 +53,7 @@ LOCAL = {
     'UNICAMP': ('Campinas', 'SP', -22.82, -47.07, 'd'),
     'UDESC': ('Florianópolis', 'SC', -27.59, -48.55, 'd'),
     'UNEMAT': ('Cáceres', 'MT', -16.07, -57.68, 'e'),
-    'UEFS': ('Feira de Santana', 'BA', -12.27, -38.97, 'd'),
+    'UEFS': ('Feira de Santana', 'BA', -12.27, -38.97, 'e'),
 }
 SIGLA_PDF = {'CLIAMB': 'PPG CLIAMB'}
 
@@ -106,10 +106,29 @@ def capitaliza(s):
                     for i, p in enumerate(pal))
 
 
-def logo(sigla):
-    arq, mime = LOGO_ARQ[sigla]
-    dados = (DJ / 'static/img/instituicoes' / arq).read_bytes()
-    return f'data:{mime};base64,{base64.b64encode(dados).decode()}'
+def chave_logo(sigla):
+    return re.sub(r'[^A-Za-z0-9]', '_', sigla)
+
+
+def css_logos():
+    """Cada logo entra uma vez, como classe .lg-<SIGLA>; os elementos só referenciam a classe."""
+    regras = []
+    for p in sorted(LOGOS.iterdir()):
+        mime = {'.png': 'image/png', '.svg': 'image/svg+xml'}.get(p.suffix)
+        if mime:
+            dados = base64.b64encode(p.read_bytes()).decode()
+            regras.append(f'.lg-{chave_logo(p.stem)}{{background-image:url(data:{mime};base64,{dados})}}')
+    return '\n'.join(regras)
+
+
+def lg(sigla, cls=''):
+    """Logo no lugar do nome; a sigla fica como rótulo acessível e dica."""
+    return f'<i class="lg lg-{chave_logo(sigla)} {cls}" role="img" aria-label="{e(sigla)}" title="{e(sigla)}"></i>'
+
+
+def lg_rede(r, cls=''):
+    return (f'<i class="lg lg-{chave_logo("REDE-" + r)} {cls}" role="img" aria-label="{e(NOME_REDE[r])}" '
+            f'title="{e(NOME_REDE[r])}"></i>')
 
 
 def br(v, casas=2):
@@ -318,7 +337,7 @@ def mapa(r):
     estados = ''.join(f'<path d="{d}" class="uf{" uf-on" if uf in ufs else ""}"/>' for uf, d in ESTADOS)
     ux, uy = proj(LOCAL['UEA'][3], LOCAL['UEA'][2])
     nmax = max(STATS[r, u]['n'] for u in univs)
-    arcos, pontos = [], []
+    arcos, pontos, rotulos = [], [], []
     for u in univs:
         cid, uf, lat, lon, lado = LOCAL[u]
         x, y = proj(lon, lat)
@@ -327,23 +346,24 @@ def mapa(r):
             mx, my = (ux + x) / 2, (uy + y) / 2
             dx, dy = x - ux, y - uy
             arcos.append(f'<path d="M{ux:.1f},{uy:.1f} Q{mx - dy * .18:.1f},{my + dx * .18:.1f} {x:.1f},{y:.1f}" class="arco"/>')
-        anc, tx = ('start', x + 15) if lado == 'd' else ('end', x - 15)
         raio = 6 + 12 * math.sqrt(st['n'] / nmax)
         tip = f'data-tip="{e(u)} · {e(cid)}/{uf}|{st["n"]} PPGs distintos em {st["areas"]} áreas"'
         if u == 'UEA':
             marca = (f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{raio + 7:.1f}" class="pulso"/>'
                      f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{raio:.1f}" fill="#0b6b3a" stroke="#fff" stroke-width="2" {tip}/>')
-            cls = 'rot rot-uea'
         elif u == r:
             marca = (f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{raio:.1f}" fill="{COR[r]}" fill-opacity=".25" stroke="{COR[r]}" stroke-width="2" {tip}/>'
                      f'<polygon points="{estrela(x, y, 10)}" fill="{COR[r]}" stroke="#fff" stroke-width="2" pointer-events="none"/>')
-            cls = 'rot rot-lider'
         else:
             marca = f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{raio:.1f}" fill="{COR[r]}" fill-opacity=".8" stroke="#fff" stroke-width="2" {tip}/>'
-            cls = 'rot'
-        pontos.append(f'{marca}<text x="{tx:.1f}" y="{y + 5:.1f}" text-anchor="{anc}" class="{cls}">{e(u)}<tspan class="rot-n" dx="5">{st["n"]}</tspan></text>')
-    return (f'<svg class="mapa" viewBox="0 0 {MAPA_W} {MAPA_H}" role="img" aria-label="Mapa das universidades da rede {e(NOME_REDE[r])}">'
-            f'<g>{estados}</g><g>{"".join(arcos)}</g><g>{"".join(pontos)}</g></svg>')
+        pontos.append(marca)
+        # rótulo em HTML sobre o SVG (posição em % do viewBox), ao lado do marcador
+        dx = raio + 6
+        rotulos.append(f'<span class="pino pino-{lado}{" pino-uea" if u == "UEA" else ""}" '
+                       f'style="left:{(x + (dx if lado == "d" else -dx)) / MAPA_W * 100:.2f}%;top:{y / MAPA_H * 100:.2f}%">'
+                       f'{lg(u)}<b>{st["n"]}</b></span>')
+    return (f'<div class="mapa-w"><svg class="mapa" viewBox="0 0 {MAPA_W} {MAPA_H}" role="img" aria-label="Mapa das universidades da rede {e(NOME_REDE[r])}">'
+            f'<g>{estados}</g><g>{"".join(arcos)}</g><g>{"".join(pontos)}</g></svg>{"".join(rotulos)}</div>')
 
 
 # ---------------------------------------------------------------- blocos
@@ -374,8 +394,8 @@ def tabela_ies(r):
                f'<i class="dot-lider" style="color:{COR[r]}">★</i>' if u == r else f'<i class="dot" style="background:{COR[r]}"></i>')
         val = f'<b class="uv">{mil(val_rede[r])}</b>' if u == 'UEA' else '<span class="uv mudo">—</span>'
         linhas.append(f'''<tr class="{"tr-uea" if u == "UEA" else ""}">
-          <td>{ico}</td><td><b class="us">{e(u)}</b><span class="uc">{e(cid)} · {uf} · {papel}</span></td>
-          <td class="bar-c"><div class="hbar"><span style="width:{st["n"] / nmax * 100:.1f}%"></span></div><b>{st["n"]}</b></td>
+          <td>{ico}</td><td>{lg(u, "lg-t")}<span class="uc">{e(cid)} · {uf} · {papel}</span></td>
+          <td><div class="bar-c"><div class="hbar"><span style="width:{st["n"] / nmax * 100:.1f}%"></span></div><b>{st["n"]}</b></div></td>
           <td class="c">{st["areas"]}/{len(AREAS[r])}</td>
           <td class="c">{br(st["media"], 1)}</td>
           <td class="notas-c">{barra_notas(st["notas"], False)}</td>
@@ -387,7 +407,7 @@ def tabela_ies(r):
 def matriz(r):
     univs = IES_REDE[r]
     vmax = max(len(distintos(cel[r, a, u])) for a in AREAS[r] for u in univs)
-    cab = ''.join(f'<th class="{"th-uea" if u == "UEA" else ""}">{e(u)}</th>' for u in univs)
+    cab = ''.join(f'<th class="{"th-uea" if u == "UEA" else ""}">{lg(u, "lg-m")}</th>' for u in univs)
     linhas = []
     for i, a in enumerate(AREAS[r]):
         tcod = AREA_TEMA.get((r, a))
@@ -449,10 +469,10 @@ def card_area(r, a, idx):
             continue
         d = distintos(cel[r, a, u])
         if not d:
-            outras.append(f'<details class="ies ies-0"><summary><b>{e(u)}</b><span>—</span></summary></details>')
+            outras.append(f'<details class="ies ies-0"><summary>{lg(u, "lg-s")}<span>—</span></summary></details>')
             continue
         itens = ''.join(f'<li><s>{x["nota"]}</s>{e(x["ppg"])}</li>' for x in sorted(d.values(), key=lambda x: (-x['nota'], x['ppg'])))
-        outras.append(f'<details class="ies"><summary><b>{e(u)}</b><span>{len(d)}</span></summary><ul>{itens}</ul></details>')
+        outras.append(f'<details class="ies"><summary>{lg(u, "lg-s")}<span>{len(d)}</span></summary><ul>{itens}</ul></details>')
     n_tot = len(distintos([x for u in IES_REDE[r] for x in cel[r, a, u]]))
     n_ies = sum(1 for u in IES_REDE[r] if cel[r, a, u])
     return f'''
@@ -487,12 +507,13 @@ def vista_rede(r):
     return f'''
 <section class="vista" id="v-{r}" data-vista="{r}" style="--c:{COR[r]};--cl:{CLARO[r]}">
   <header class="topo">
-    <div class="logo-g"><img src="{logo(r)}" alt="{r}"></div>
+    <div class="logo-g">{lg_rede(r, "lg-g")}</div>
     <div class="titulo">
-      <span class="kick">CAPES Global · {e(NOME_REDE[r])} · coordenada pela {r}</span>
+      <span class="kick">CAPES Global · Anexo I da proposta</span>
       <h1>{e(NOME_REDE[r])}: <em>quem está na rede</em> e onde a UEA entra</h1>
       <p>Anexo I da proposta (todas as áreas, IES e PPGs) cruzado com o comitê UEA e o balanço de setembro/2027.</p>
     </div>
+    <div class="coord-por"><span>coordenada pela</span>{lg(r, "lg-g")}</div>
   </header>
   <div class="kpis">{kpi_html}</div>
 
@@ -548,12 +569,12 @@ def vista_geral():
     for r in REDES:
         vr = por_rede[r]
         barras = ''.join(
-            f'<div class="pb{" pb-uea" if u == "UEA" else ""}"><span>{e(u)}</span><div class="hbar"><span style="width:{STATS[r, u]["n"] / nmax * 100:.1f}%;'
+            f'<div class="pb{" pb-uea" if u == "UEA" else ""}">{lg(u, "lg-b")}<div class="hbar"><span style="width:{STATS[r, u]["n"] / nmax * 100:.1f}%;'
             f'{"background:#0b6b3a" if u == "UEA" else ""}"></span></div><b>{STATS[r, u]["n"]}</b></div>' for u in IES_REDE[r])
         n_uea_areas = sum(1 for a in AREAS[r] if cel[r, a, 'UEA'])
         cards.append(f'''
       <button class="rede-card" data-ir="{r}" style="--c:{COR[r]};--cl:{CLARO[r]}">
-        <div class="rc-top"><img src="{logo(r)}" alt="{r}"><div><b>{e(NOME_REDE[r])}</b><span>coordenada pela {r}</span></div></div>
+        <div class="rc-top">{lg_rede(r, "lg-rc")}<div class="rc-coord"><span>coordenada pela</span>{lg(r, "lg-rcc")}</div></div>
         <div class="rc-val"><b>{mil(val_rede[r])}</b><span>previsto UEA · {bol_rede[r]} bolsas</span></div>
         <dl><div><dt>IES</dt><dd>{len(IES_REDE[r])}</dd></div><div><dt>Áreas</dt><dd>{len(AREAS[r])}</dd></div>
           <div><dt>PPGs</dt><dd>{len(distintos(vr))}</dd></div><div><dt>UEA em</dt><dd>{n_uea_areas}/{len(AREAS[r])} áreas</dd></div></dl>
@@ -588,22 +609,23 @@ def vista_geral():
             cels.append(f'<td style="--c:{COR[r]}"><div class="ur ur-fora">{f"<b>{mil(val)}</b> <u>{nb}×</u>" if val else "<b class=ad>sem pedido</b>"}'
                         f'<small>só no comitê T{p["temaId"][-1]} — fora do Anexo I</small></div></td>')
         linhas.append(f'<tr class="tr-fora"><th><b>{e(sig)}</b><span>{e(p["nome"])}</span></th><td class="c"><s class="nota-s">{p["notaCapes"]}</s></td>{"".join(cels)}</tr>')
-    cab = ''.join(f'<th style="--c:{COR[r]}"><i class="dot" style="background:{COR[r]}"></i>{e(NOME_REDE[r])}</th>' for r in REDES)
+    cab = ''.join(f'<th style="--c:{COR[r]}">{lg_rede(r, "lg-th")}</th>' for r in REDES)
     # notas por rede: IES coordenadora, associadas, UEA
     perf = []
     for r in REDES:
         d = distintos(por_rede[r])
-        perf.append(f'<div class="pf"><span><i class="dot" style="background:{COR[r]}"></i>{e(NOME_REDE[r])} <small>({len(d)} PPGs)</small></span>{barra_notas(Counter(v["nota"] for v in d.values()))}</div>')
-    perf.append(f'<div class="pf pf-uea"><span><i class="dot dot-uea"></i>UEA nos anexos <small>({len(uea_all)} PPGs)</small></span>{barra_notas(Counter(v["nota"] for v in uea_all.values()))}</div>')
+        perf.append(f'<div class="pf"><span>{lg_rede(r, "lg-pf")}<small>({len(d)} PPGs)</small></span>{barra_notas(Counter(v["nota"] for v in d.values()))}</div>')
+    perf.append(f'<div class="pf pf-uea"><span>{lg("UEA", "lg-pf")}<small>nos anexos · ({len(uea_all)} PPGs)</small></span>{barra_notas(Counter(v["nota"] for v in uea_all.values()))}</div>')
     return f'''
 <section class="vista on" id="v-geral" data-vista="geral" style="--c:#0b6b3a;--cl:#e3f1e9">
   <header class="topo">
-    <div class="logo-g"><img src="{logo('UEA')}" alt="UEA"></div>
+    <div class="logo-g">{lg('UEA', 'lg-g')}</div>
     <div class="titulo">
       <span class="kick">CAPES Global.EDU · PROPESP / UEA · mapeamento dos Anexos I</span>
       <h1>A UEA nas <em>3 redes CAPES Global</em></h1>
       <p>Universidades, áreas temáticas e PPGs de cada rede, com os valores previstos para a UEA em setembro/2027.</p>
     </div>
+    <div class="coord-por"><i class="lg lg-CAPESGLOBAL lg-g" role="img" aria-label="CAPES Global.edu" title="CAPES Global.edu"></i></div>
   </header>
   <div class="kpis">{kpi_html}</div>
   <div class="redes-cards">{"".join(cards)}</div>
@@ -649,8 +671,8 @@ def vista_explorar():
 
 
 # ---------------------------------------------------------------- página
-abas = ('<button class="aba on" data-vista="geral"><img src="' + logo('UEA') + '" alt="">Visão geral</button>'
-        + ''.join(f'<button class="aba" data-vista="{r}" style="--c:{COR[r]}"><img src="{logo(r)}" alt="">{e(NOME_REDE[r])}</button>' for r in REDES)
+abas = (f'<button class="aba on" data-vista="geral">{lg("UEA", "lg-aba")}Visão geral</button>'
+        + ''.join(f'<button class="aba aba-r" data-vista="{r}" style="--c:{COR[r]}">{lg_rede(r, "lg-aba-r")}</button>' for r in REDES)
         + '<button class="aba" data-vista="explorar">🔍 Explorar PPGs</button>')
 DADOS = {'redes': {r: NOME_REDE[r] for r in REDES}, 'cor': COR, 'areas': AREAS,
          'ies': IES_REDE, 'v': [[v['rede'], v['area'], v['ies'], v['ppg'], v['cod'], v['nota'], v['pag']] for v in vinc]}
@@ -664,7 +686,8 @@ pagina = f'''<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>UEA nas Redes CAPES Global</title>
-<style>{CSS}</style>
+<style>{CSS}
+{css_logos()}</style>
 </head>
 <body>
 <nav class="barra">

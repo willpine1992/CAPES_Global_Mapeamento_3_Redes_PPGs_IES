@@ -17,3 +17,6 @@ python3 build_dashboard.py   # requer openpyxl e pdftotext (poppler)
 Fontes: `CAPES_Global_Mapeamento_3_Redes_PPGs_IES.xlsm` (Anexos I das propostas),
 `fontes/Balanco_CAPES_Global_2027…pdf` (Setembro 2027 | Bolsas a atender) e o cadastro do
 comitê CAPES Global do Gerenciador PROPESP (caminho local em `build_dashboard.py`).
+
+Logos: originais em `imagens/`; `logos/` guarda as versões recortadas e reduzidas que o build embute
+(uma vez cada, como classes CSS `.lg-<SIGLA>`).

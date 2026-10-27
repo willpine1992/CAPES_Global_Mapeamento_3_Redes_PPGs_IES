@@ -64,7 +64,7 @@ function render() {
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   $('#f-corpo').innerHTML = ls.map(l => `<tr class="${l.ies === 'UEA' ? 'uea' : ''}">
     <td><span class="rd"><i class="dot" style="background:${DADOS.cor[l.rede]}"></i>${esc(DADOS.redes[l.rede])}</span></td>
-    <td>${esc(l.area)}</td><td class="ies-c">${esc(l.ies)}</td><td>${esc(l.ppg)}</td><td class="cod">${esc(l.cod)}</td>
+    <td>${esc(l.area)}</td><td class="ies-c"><i class="lg lg-${l.ies.replace(/[^A-Za-z0-9]/g, '_')} lg-x" role="img" aria-label="${esc(l.ies)}" title="${esc(l.ies)}"></i></td><td>${esc(l.ppg)}</td><td class="cod">${esc(l.cod)}</td>
     <td class="c"><s class="nota-s">${l.nota}</s></td><td class="c">${l.pag}</td></tr>`).join('');
   $$('.t-exp th').forEach(th => th.className = (th.dataset.k === ordem.k ? (ordem.dir > 0 ? 'sort-asc' : 'sort-desc') : '') + (['nota', 'pag'].includes(th.dataset.k) ? ' c' : ''));
 }
